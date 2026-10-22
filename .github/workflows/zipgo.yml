@@ -12,13 +12,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - run: gradle --no-daemon -p ZipGo :app:assembleDebug
+      - name: Check Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" || true
+          ls "$ANDROID_HOME/build-tools" || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' || true
+      - name: Build debug APK
+        run: gradle --no-daemon -p ZipGo :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: ZipGo-APK
           path: ZipGo/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
