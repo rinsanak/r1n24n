@@ -1,1 +1,0 @@
-ZipGo minimal Android installer build project.
