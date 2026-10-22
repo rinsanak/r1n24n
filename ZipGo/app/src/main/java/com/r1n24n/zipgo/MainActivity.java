@@ -9,7 +9,7 @@ LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(
 TextView logo=new TextView(this);logo.setText("⬡");logo.setTextSize(68);logo.setTextColor(0xff5ce5c4);root.addView(logo);
 TextView title=new TextView(this);title.setText("ZipGo");title.setTextSize(38);title.setTypeface(null,Typeface.BOLD);title.setTextColor(-1);root.addView(title);
 TextView sub=new TextView(this);sub.setText("APK  ·  APKS  ·  XAPK  ·  SAPK");sub.setTextColor(0xff9aaac4);sub.setTextSize(14);root.addView(sub);
-choose=new Button(this);choose.setText("Choose package");choose.setTextAllCaps(false);choose.setTextSize(17);choose.setTextColor(0xff0d1322);choose.setBackground(bg(0xff5ce5c4));LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,d(58));bp.topMargin=d(45);root.addView(choose,bp);
+choose=new Button(this);choose.setText("Choose package");choose.setTextSize(17);choose.setTextColor(0xff0d1322);choose.setBackground(bg(0xff5ce5c4));LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,d(58));bp.topMargin=d(45);root.addView(choose,bp);
 status=new TextView(this);status.setText("Ready. No background services.");status.setTextColor(0xffb9c7db);status.setTextSize(14);LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,-2);sp.topMargin=d(24);root.addView(status,sp);setContentView(root);
 choose.setOnClickListener(v->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("*/*");i.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,PICK);});
 Intent in=getIntent();if(Intent.ACTION_VIEW.equals(in.getAction())&&in.getData()!=null)install(in.getData());
