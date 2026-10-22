@@ -10,7 +10,7 @@ button("Extract ZIP to folder",()->pick(DEST,"*/*",false));
 button("Create ZIP from files",()->pick(SELECT,"*/*",true));
 button("Open system file manager",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);startActivityForResult(i,30);});
 status=new TextView(this);status.setTextColor(-1);status.setTextSize(14);status.setText("Offline · no background service");root.addView(status);setContentView(root);}
-void button(String s,Runnable r){Button b=new Button(this);b.setText(s);b.setAllCaps(false);root.addView(b,new LinearLayout.LayoutParams(-1,dp(56)));b.setOnClickListener(v->{if(!working)r.run();});}
+void button(String s,Runnable r){Button b=new Button(this);b.setText(s);root.addView(b,new LinearLayout.LayoutParams(-1,dp(56)));b.setOnClickListener(v->{if(!working)r.run();});}
 void pick(int code,String mime,boolean multiple){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType(mime);i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,multiple);startActivityForResult(i,code);}
 void say(String s){runOnUiThread(()->status.setText(s));}
 String filename(Uri u){try(Cursor c=getContentResolver().query(u,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){if(c!=null&&c.moveToFirst())return c.getString(0);}catch(Exception ignored){}return "file";}
