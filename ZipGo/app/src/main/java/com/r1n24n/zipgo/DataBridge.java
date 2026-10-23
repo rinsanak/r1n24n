@@ -22,8 +22,8 @@ final class DataBridge {
         final String name;final boolean directory;final long length;
         Entry(String name,boolean directory,long length) {this.name=name;this.directory=directory;this.length=length;}
     }
-    private final Activity activity;
-    private final Listener listener;
+    private Activity activity;
+    private Listener listener;
     private final Shizuku.UserServiceArgs args;
     private IBinder binder;
     private boolean binding;
