@@ -151,7 +151,7 @@ public final class MainActivity extends Activity {
         selectionBar.setVisibility(View.GONE);
         action(selectionBar,"Copy",()->copySelected(false));
         action(selectionBar,"Move",()->copySelected(true));
-        action(selectionBar,"ZIP",()->compressSelected());
+        action(selectionBar,"Archive",()->compressSelected());
         action(selectionBar,"Delete",()->deleteSelected());
         action(selectionBar,"More",()->selectedMore());
         base.addView(selectionBar);
@@ -403,7 +403,7 @@ public final class MainActivity extends Activity {
     }
     void createMenu(){
         new AlertDialog.Builder(this).setTitle("New")
-          .setItems(new String[]{"Folder","ZIP from selected files"},(d,n)->{
+          .setItems(new String[]{"Folder","Archive from selected files"},(d,n)->{
              if(n==0)createFolder();else compressSelected();
           }).show();
     }
@@ -421,21 +421,46 @@ public final class MainActivity extends Activity {
             }).show();
     }
     void compressSelected(){
-        if(selected.isEmpty()){message("Long-press files to select, then tap ZIP");return;}
-        ArrayList<File> files=new ArrayList<>();
+        if(selected.isEmpty()){message("Long-press files to select, then tap Archive");return;}
+        final ArrayList<File> files=new ArrayList<>();
         for(String p:selected){
             if(DataBridge.protectedPath(p)){message("Export protected files before compression");return;}
             files.add(new File(p));
         }
-        EditText e=new EditText(this);e.setSingleLine(true);e.setText("Archive.zip");
-        new AlertDialog.Builder(this).setTitle("Create ZIP archive").setView(e)
-            .setNegativeButton("Cancel",null).setPositiveButton("Compress",(d,w)->{
-                String entered=e.getText().toString().trim();
-                final String zipName=entered.toLowerCase(Locale.ROOT).endsWith(".zip")?entered:entered+".zip";
-                runWork("Compressing…",()->{
-                    FileTasks.validateName(zipName);
-                    FileTasks.zip(files,new File(current,zipName),this::message);selected.clear();
-                });
+        final String[] formats={"ZIP","ZIP · AES-256 password","7z","TAR.GZ"};
+        new AlertDialog.Builder(this).setTitle("Create archive")
+            .setItems(formats,(dialog,chosen)->{
+                final String format=chosen<2?"zip":chosen==2?"7z":"tar.gz";
+                final boolean encrypted=chosen==1;
+                LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+                box.setPadding(d(20),d(6),d(20),0);
+                EditText name=new EditText(this);name.setSingleLine(true);
+                name.setText("Archive."+format);box.addView(name);
+                EditText pass=new EditText(this);pass.setSingleLine(true);
+                pass.setHint("Archive password (minimum 6 characters)");
+                pass.setInputType(android.text.InputType.TYPE_CLASS_TEXT|
+                    android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                if(encrypted)box.addView(pass);
+                new AlertDialog.Builder(this).setTitle(encrypted?"AES-256 ZIP":"Create "+format)
+                    .setView(box).setNegativeButton("Cancel",null)
+                    .setPositiveButton("Compress",(d,w)->{
+                        String entered=name.getText().toString().trim();
+                        final String outputName=entered.toLowerCase(Locale.ROOT).endsWith("."+format)?
+                            entered:entered+"."+format;
+                        final char[] password=encrypted?pass.getText().toString().toCharArray():null;
+                        if(encrypted&&password.length<6){
+                            message("Use at least 6 characters for encrypted archive");
+                            Arrays.fill(password,'\\u0000');return;
+                        }
+                        final String directory=current;
+                        runWork("Creating "+format+"…",()->{
+                            try{
+                                FileTasks.validateName(outputName);
+                                FileTasks.createArchive(files,new File(directory,outputName),format,password,this::message);
+                                selected.clear();
+                            }finally{if(password!=null)Arrays.fill(password,'\\u0000');}
+                        });
+                    }).show();
             }).show();
     }
     void properties(String path){
