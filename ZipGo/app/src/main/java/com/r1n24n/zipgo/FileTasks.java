@@ -115,4 +115,85 @@ final class FileTasks {
             zip.closeEntry();
         }
     }
+
+    /** Additional archive creation formats. ZIP AES encryption uses Zip4j. */
+    static void createArchive(List<File> source,File output,String format,char[] password,Progress progress)throws Exception{
+        format=format.toLowerCase(Locale.ROOT);
+        if(format.equals("zip")&&(password==null||password.length==0)){zip(source,output,progress);return;}
+        output=checked(output);noProtected(output);
+        if(output.exists())throw new IOException("Archive already exists");
+        for(File f:source){checked(f);noProtected(f);if(!f.exists())throw new IOException("Missing "+f.getName());}
+        try{
+            if(format.equals("zip")){
+                try(net.lingala.zip4j.ZipFile archive=new net.lingala.zip4j.ZipFile(output,password)){
+                    net.lingala.zip4j.model.ZipParameters params=new net.lingala.zip4j.model.ZipParameters();
+                    params.setCompressionMethod(net.lingala.zip4j.model.enums.CompressionMethod.DEFLATE);
+                    params.setEncryptFiles(true);
+                    params.setEncryptionMethod(net.lingala.zip4j.model.enums.EncryptionMethod.AES);
+                    params.setAesKeyStrength(net.lingala.zip4j.model.enums.AesKeyStrength.KEY_STRENGTH_256);
+                    for(File item:source){
+                        if(progress!=null)progress.message("Compressing "+item.getName());
+                        if(item.isDirectory())archive.addFolder(item,params);
+                        else archive.addFile(item,params);
+                    }
+                }
+            }else if(format.equals("7z")){
+                try(org.apache.commons.compress.archivers.sevenz.SevenZOutputFile seven=
+                    new org.apache.commons.compress.archivers.sevenz.SevenZOutputFile(output)){
+                    int[] count={0};
+                    for(File src:source)sevenItem(checked(src),src.getName(),seven,0,count,progress);
+                    seven.finish();
+                }
+            }else if(format.equals("tar.gz")){
+                try(OutputStream raw=new BufferedOutputStream(new FileOutputStream(output));
+                    java.util.zip.GZIPOutputStream gzip=new java.util.zip.GZIPOutputStream(raw);
+                    org.apache.commons.compress.archivers.tar.TarArchiveOutputStream tar=
+                        new org.apache.commons.compress.archivers.tar.TarArchiveOutputStream(gzip)){
+                    tar.setLongFileMode(org.apache.commons.compress.archivers.tar.TarArchiveOutputStream.LONGFILE_POSIX);
+                    int[] count={0};
+                    for(File src:source)tarItem(checked(src),src.getName(),tar,0,count,progress);
+                    tar.finish();
+                }
+            }else throw new IOException("Unsupported creation format");
+        }catch(Exception e){output.delete();throw e;}
+    }
+    private static void sevenItem(File src,String name,
+        org.apache.commons.compress.archivers.sevenz.SevenZOutputFile archive,
+        int depth,int[] count,Progress progress)throws Exception{
+        if(depth>60||++count[0]>100000)throw new IOException("Too many entries");
+        if(progress!=null)progress.message("Compressing "+name);
+        org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry entry=
+            archive.createArchiveEntry(src,src.isDirectory()?name+"/":name);
+        archive.putArchiveEntry(entry);
+        if(src.isFile()){
+            try(InputStream in=new BufferedInputStream(new FileInputStream(src))){
+                byte[] buffer=new byte[65536];int n;
+                while((n=in.read(buffer))!=-1)archive.write(buffer,0,n);
+            }
+        }
+        archive.closeArchiveEntry();
+        if(src.isDirectory()){
+            File[] children=src.listFiles();if(children==null)throw new IOException("Cannot list folder");
+            for(File child:children)sevenItem(checked(child),name+"/"+child.getName(),archive,depth+1,count,progress);
+        }
+    }
+    private static void tarItem(File src,String name,
+        org.apache.commons.compress.archivers.tar.TarArchiveOutputStream archive,
+        int depth,int[] count,Progress progress)throws Exception{
+        if(depth>60||++count[0]>100000)throw new IOException("Too many entries");
+        if(progress!=null)progress.message("Compressing "+name);
+        org.apache.commons.compress.archivers.tar.TarArchiveEntry entry=
+            new org.apache.commons.compress.archivers.tar.TarArchiveEntry(src,src.isDirectory()?name+"/":name);
+        archive.putArchiveEntry(entry);
+        if(src.isFile()){
+            try(InputStream in=new BufferedInputStream(new FileInputStream(src))){
+                transfer(in,archive,null);
+            }
+        }
+        archive.closeArchiveEntry();
+        if(src.isDirectory()){
+            File[] children=src.listFiles();if(children==null)throw new IOException("Cannot list folder");
+            for(File child:children)tarItem(checked(child),name+"/"+child.getName(),archive,depth+1,count,progress);
+        }
+    }
 }
