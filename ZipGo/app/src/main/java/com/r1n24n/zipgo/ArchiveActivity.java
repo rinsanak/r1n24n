@@ -1,28 +1,144 @@
 package com.r1n24n.zipgo;
-import android.app.*;import android.os.*;import android.content.*;import android.net.Uri;import android.provider.OpenableColumns;import android.database.Cursor;import android.graphics.Typeface;import android.graphics.drawable.GradientDrawable;import android.view.*;import android.widget.*;import android.provider.DocumentsContract;import java.io.*;import java.util.*;import java.util.zip.*;
-public class ArchiveActivity extends Activity {
-static final int OPEN=20,DEST=21,SELECT=22,OUT=23; Uri archive;ArrayList<Uri> selected=new ArrayList<>();boolean working=false,cancel=false;TextView status;LinearLayout root;
-int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+.5f);}
-public void onCreate(Bundle b){super.onCreate(b);getWindow().setStatusBarColor(0xff0d1322);getWindow().setNavigationBarColor(0xff0d1322);root=new LinearLayout(this);root.setOrientation(1);root.setPadding(dp(20),dp(30),dp(20),dp(20));root.setBackgroundColor(0xff0d1322);
-TextView title=new TextView(this);title.setText("ZipGo · Files");title.setTextSize(26);title.setTypeface(null,Typeface.BOLD);title.setTextColor(0xff5ce5c4);root.addView(title);
-button("Browse ZIP / APK contents",()->pick(OPEN,"*/*",false));
-button("Extract ZIP to folder",()->pick(DEST,"*/*",false));
-button("Create ZIP from files",()->pick(SELECT,"*/*",true));
-button("Open system file manager",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);startActivityForResult(i,30);});
-status=new TextView(this);status.setTextColor(-1);status.setTextSize(14);status.setText("Offline · no background service");root.addView(status);setContentView(root);}
-void button(String s,Runnable r){Button b=new Button(this);b.setText(s);root.addView(b,new LinearLayout.LayoutParams(-1,dp(56)));b.setOnClickListener(v->{if(!working)r.run();});}
-void pick(int code,String mime,boolean multiple){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType(mime);i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,multiple);startActivityForResult(i,code);}
-void say(String s){runOnUiThread(()->status.setText(s));}
-String filename(Uri u){try(Cursor c=getContentResolver().query(u,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){if(c!=null&&c.moveToFirst())return c.getString(0);}catch(Exception ignored){}return "file";}
-protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null)return;
-if(request==OPEN){Uri u=data.getData();if(u!=null)list(u);}
-if(request==DEST){archive=data.getData();if(archive!=null){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);startActivityForResult(i,31);}}
-if(request==31){Uri folder=data.getData();if(folder!=null&&archive!=null)extract(archive,folder);}
-if(request==SELECT){selected.clear();if(data.getClipData()!=null){for(int n=0;n<data.getClipData().getItemCount();n++)selected.add(data.getClipData().getItemAt(n).getUri());}else if(data.getData()!=null)selected.add(data.getData());if(!selected.isEmpty()){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("application/zip");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,"ZipGo.zip");startActivityForResult(i,OUT);}}
-if(request==OUT&&data.getData()!=null)compress(data.getData());}
-void list(Uri u){working=true;cancel=false;say("Reading archive…");new Thread(()->{try(InputStream in=getContentResolver().openInputStream(u);ZipInputStream zip=new ZipInputStream(new BufferedInputStream(in))){ArrayList<String> names=new ArrayList<>();ZipEntry e;int count=0;while((e=zip.getNextEntry())!=null){if(cancel)break;if(++count>10000)throw new IOException("Too many entries");names.add(e.getName());zip.closeEntry();}runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Archive · "+names.size()+" items").setItems(names.toArray(new String[0]),(d,w)->{}).setPositiveButton("Close",null).show());say("Archive read: "+names.size()+" items");}catch(Exception e){say("Cannot read archive: "+e.getMessage());}finally{working=false;}}).start();}
-void extract(Uri source,Uri folder){working=true;cancel=false;say("Extracting…");new Thread(()->{int count=0;long bytes=0;try(InputStream in=getContentResolver().openInputStream(source);ZipInputStream zip=new ZipInputStream(new BufferedInputStream(in))){ZipEntry e;while((e=zip.getNextEntry())!=null){if(cancel)throw new IOException("Cancelled");String path=e.getName().replace('\\','/');if(path.startsWith("/")||path.contains("../")||path.equals(".."))throw new IOException("Unsafe path in archive");if(path.isEmpty())continue;String[] parts=path.split("/");Uri dir=folder;for(int j=0;j<parts.length-(e.isDirectory()?0:1);j++){if(parts[j].isEmpty())continue;dir=childDir(dir,parts[j]);}if(!e.isDirectory()){String name=parts[parts.length-1];Uri output=DocumentsContract.createDocument(getContentResolver(),dir,"application/octet-stream",name);if(output==null)throw new IOException("Cannot create "+name);try(OutputStream out=getContentResolver().openOutputStream(output)){byte[] buf=new byte[32768];int n;while((n=zip.read(buf))!=-1){if(cancel)throw new IOException("Cancelled");out.write(buf,0,n);bytes+=n;if(bytes>8589934592L)throw new IOException("Archive exceeds 8 GB limit");}}count++;if(count>10000)throw new IOException("Too many files");}zip.closeEntry();}say("Extracted "+count+" files");}catch(Exception ex){say("Extract failed: "+ex.getMessage());}finally{working=false;}}).start();}
-Uri childDir(Uri parent,String name)throws Exception{Uri children=DocumentsContract.buildChildDocumentsUriUsingTree(parent,DocumentsContract.getDocumentId(parent));try(Cursor c=getContentResolver().query(children,new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID,DocumentsContract.Document.COLUMN_DISPLAY_NAME,DocumentsContract.Document.COLUMN_MIME_TYPE},null,null,null)){if(c!=null)while(c.moveToNext()){if(name.equals(c.getString(1))&&DocumentsContract.Document.MIME_TYPE_DIR.equals(c.getString(2)))return DocumentsContract.buildDocumentUriUsingTree(parent,c.getString(0));}}Uri u=DocumentsContract.createDocument(getContentResolver(),parent,DocumentsContract.Document.MIME_TYPE_DIR,name);if(u==null)throw new IOException("Cannot create folder "+name);return u;}
-void compress(Uri output){working=true;cancel=false;say("Compressing…");new Thread(()->{try(OutputStream raw=getContentResolver().openOutputStream(output);ZipOutputStream zip=new ZipOutputStream(new BufferedOutputStream(raw))){HashSet<String> used=new HashSet<>();long bytes=0;for(Uri u:selected){if(cancel)throw new IOException("Cancelled");String name=filename(u);String base=name;int i=1;while(!used.add(name))name=(i++)+"_"+base;zip.putNextEntry(new ZipEntry(name));try(InputStream in=getContentResolver().openInputStream(u)){byte[] buf=new byte[32768];int n;while((n=in.read(buf))!=-1){if(cancel)throw new IOException("Cancelled");zip.write(buf,0,n);bytes+=n;if(bytes>8589934592L)throw new IOException("Over 8 GB limit");}}zip.closeEntry();}say("ZIP created: "+selected.size()+" files");}catch(Exception ex){say("ZIP failed: "+ex.getMessage());}finally{working=false;}}).start();}
-protected void onDestroy(){cancel=true;super.onDestroy();}
+
+import android.app.*;
+import android.content.*;
+import android.graphics.Typeface;
+import android.os.*;
+import android.view.*;
+import android.widget.*;
+import java.io.*;
+import java.util.*;
+
+/** File-manager archive view, not a separate installer application. */
+public final class ArchiveActivity extends Activity {
+    final int BG=0xff0b1019, SURFACE=0xff172133, ACCENT=0xff5ce5c4;
+    File file;
+    String prefix="";
+    char[] password;
+    ArrayList<ArchiveEngine.Item> entries=new ArrayList<>();
+    ArrayList<String> folders=new ArrayList<>();
+    ArrayList<ArchiveEngine.Item> children=new ArrayList<>();
+    TextView subtitle,status;
+    LinearLayout list;
+    boolean busy=false;
+    int dp(int n){return (int)(n*getResources().getDisplayMetrics().density+.5f);}
+    TextView label(String value,int size,int color){
+        TextView v=new TextView(this);v.setText(value);v.setTextColor(color);v.setTextSize(size);return v;
+    }
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
+        String path=getIntent().getStringExtra("archive_file");
+        if(path==null){finish();return;}
+        file=new File(path);
+        LinearLayout root=new LinearLayout(this);root.setPadding(dp(15),dp(25),dp(15),dp(12));
+        root.setOrientation(1);root.setBackgroundColor(BG);
+        TextView title=label(file.getName(),22,0xffffffff);title.setTypeface(null,Typeface.BOLD);
+        title.setSingleLine(true);title.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);root.addView(title);
+        subtitle=label("",13,0xffaabbd0);subtitle.setPadding(0,dp(10),0,dp(9));root.addView(subtitle);
+        LinearLayout actions=new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);root.addView(actions);
+        button(actions,"Extract here",()->extract(false));
+        button(actions,"To folder",()->extract(true));
+        button(actions,"Password",()->password());
+        status=label("Reading archive…",12,0xffaabbd0);status.setPadding(0,dp(10),0,dp(7));root.addView(status);
+        ScrollView scroll=new ScrollView(this);list=new LinearLayout(this);list.setOrientation(1);
+        scroll.addView(list);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        TextView warning=label("Extraction never silently overwrites existing files.",11,0xff8da5ba);
+        root.addView(warning);setContentView(root);
+        readArchive();
+    }
+    void button(LinearLayout bar,String title,Runnable action){
+        Button b=new Button(this);b.setText(title);b.setTextSize(12);
+        bar.addView(b,new LinearLayout.LayoutParams(0,dp(49),1));b.setOnClickListener(v->action.run());
+    }
+    void report(String t){runOnUiThread(()->{if(!isFinishing())status.setText(t);});}
+    void readArchive(){
+        if(busy)return;busy=true;report("Reading…");
+        new Thread(()->{
+            try{
+                List<ArchiveEngine.Item> result=ArchiveEngine.list(file,password);
+                runOnUiThread(()->{
+                    entries.clear();entries.addAll(result);render();report(entries.size()+" entries");
+                });
+            }catch(Exception error){report("Cannot open archive: "+error.getMessage()+". Enter password if encrypted.");}
+            finally{busy=false;}
+        },"ZipGo-archive-read").start();
+    }
+    void render(){
+        if(isFinishing())return;
+        list.removeAllViews();folders.clear();children.clear();
+        subtitle.setText((prefix.isEmpty()?"/":"/"+prefix)+"  ·  "+entries.size()+" total entries");
+        TreeSet<String> dirs=new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for(ArchiveEngine.Item e:entries){
+            String path=e.name.replace('\\','/');
+            if(!path.startsWith(prefix)||path.equals(prefix))continue;
+            String remain=path.substring(prefix.length());
+            if(remain.isEmpty())continue;
+            int split=remain.indexOf('/');
+            if(split>=0){if(split>0)dirs.add(remain.substring(0,split));}
+            else if(!e.folder){children.add(e);}
+        }
+        for(String dir:dirs)folders.add(dir);
+        if(!prefix.isEmpty())item("⬆  ..","Back",()->up());
+        for(String dir:folders)item("📁  "+dir,"Folder",()->{prefix+=dir+"/";render();});
+        for(ArchiveEngine.Item entry:children){
+            item("▤  "+entry.name.substring(prefix.length()),FileTasks.readable(Math.max(0,entry.size)),()->
+                 new AlertDialog.Builder(this).setTitle(entry.name)
+                 .setMessage("Size: "+FileTasks.readable(Math.max(0,entry.size))+"\nUse Extract to unpack this archive.")
+                 .setPositiveButton("OK",null).show());
+        }
+        if(folders.isEmpty()&&children.isEmpty()&&prefix.isEmpty())
+            item("No visible entries","Try a password if the archive is encrypted",()->password());
+    }
+    void item(String name,String description,Runnable callback){
+        LinearLayout line=new LinearLayout(this);line.setOrientation(1);line.setPadding(dp(13),dp(9),dp(12),dp(8));
+        GradientDrawableCompat.apply(line,SURFACE,dp(10));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.bottomMargin=dp(5);list.addView(line,p);
+        line.addView(label(name,15,0xffe6eff9));
+        line.addView(label(description,11,0xff9caec0));
+        line.setOnClickListener(v->callback.run());
+    }
+    void up(){if(prefix.isEmpty()){finish();return;}
+        String remaining=prefix.substring(0,prefix.length()-1);
+        int i=remaining.lastIndexOf('/');
+        prefix=i<0?"":remaining.substring(0,i+1);render();
+    }
+    @Override public void onBackPressed(){if(prefix.isEmpty())super.onBackPressed();else up();}
+    void password(){
+        EditText input=new EditText(this);input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        new AlertDialog.Builder(this).setTitle("Archive password")
+            .setView(input).setNegativeButton("Cancel",null).setPositiveButton("Apply",(d,w)->{
+                if(password!=null)Arrays.fill(password,'\u0000');
+                password=input.getText().toString().toCharArray();
+                readArchive();
+            }).show();
+    }
+    void extract(boolean separateFolder){
+        if(busy)return;
+        String base=file.getName().replaceFirst("(?i)\\.(zip|7z|rar|tar|gz|tgz|apks|xapk|sapk)$","");
+        File folder=separateFolder?new File(file.getParentFile(),base):file.getParentFile();
+        String label=separateFolder?"Extract to "+folder.getName()+"?":"Extract files here?";
+        new AlertDialog.Builder(this).setTitle(label)
+            .setMessage("Existing files will not be overwritten.")
+            .setNegativeButton("Cancel",null).setPositiveButton("Extract",(d,w)->{
+                busy=true;report("Extracting "+file.getName()+"…");
+                new Thread(()->{
+                    try{
+                        if(separateFolder&&!folder.exists()&&!folder.mkdirs())throw new IOException("Cannot create destination");
+                        ArchiveEngine.extract(file,folder,password,this::report);
+                        report("Extract completed");
+                    }catch(Exception e){report("Extraction error: "+e.getMessage()+". Check storage and password.");}
+                    finally{busy=false;}
+                },"ZipGo-extract").start();
+            }).show();
+    }
+    static final class GradientDrawableCompat{
+        static void apply(View v,int color,int radius){
+            android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();
+            bg.setColor(color);bg.setCornerRadius(radius);v.setBackground(bg);
+        }
+    }
+    @Override protected void onDestroy(){if(password!=null)Arrays.fill(password,'\u0000');super.onDestroy();}
 }
