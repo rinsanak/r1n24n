@@ -262,6 +262,7 @@ public final class MainActivity extends Activity {
             return compare;
         });
         adapter.notifyDataSetChanged();
+        android.view.ViewGroup.LayoutParams eparams=empty.getLayoutParams();if(eparams!=null){eparams.height=d(24);empty.setLayoutParams(eparams);}
         empty.setVisibility(visible.isEmpty()?View.VISIBLE:View.GONE);
         empty.setText(visible.isEmpty()?"No files to show":"");
     }
@@ -269,6 +270,7 @@ public final class MainActivity extends Activity {
     void showProtectedHelp(String message){
         foot.setText(message==null?"Shizuku access unavailable":message);
         empty.setVisibility(View.VISIBLE);
+        android.view.ViewGroup.LayoutParams eparams=empty.getLayoutParams();if(eparams!=null){eparams.height=d(90);empty.setLayoutParams(eparams);}
         empty.setText("Android/data needs Shizuku.\nStart Shizuku and tap here to connect.");
         empty.setOnClickListener(v->{bridge.connect();refresh();});
     }
@@ -451,6 +453,7 @@ public final class MainActivity extends Activity {
         if(apk)choices.add("Install package");
         if(archive)choices.add("Open archive");
         if(archive)choices.add("Extract here");
+        if(e.protectedFile)choices.add("Copy to Downloads");
         choices.add("Open with…");choices.add("Copy");choices.add("Move");choices.add("Rename");choices.add("Share");choices.add("Properties");choices.add("Delete");
         new AlertDialog.Builder(this).setTitle(e.name).setItems(choices.toArray(new String[0]),(dialog,which)->{
             String c=choices.get(which);
@@ -458,6 +461,7 @@ public final class MainActivity extends Activity {
                 case "Install package":install(e.path);break;
                 case "Open archive":showArchive(e.path);break;
                 case "Extract here":extract(e.path);break;
+                case "Copy to Downloads":exportProtected(e.path);break;
                 case "Open with…":view(e.path,false);break;
                 case "Copy":selected.clear();selected.add(e.path);copySelected(false);break;
                 case "Move":selected.clear();selected.add(e.path);copySelected(true);break;
@@ -467,6 +471,16 @@ public final class MainActivity extends Activity {
                 case "Delete":selected.clear();selected.add(e.path);deleteSelected();break;
             }
         }).show();
+    }
+    void exportProtected(String path){
+        if(!DataBridge.protectedPath(path)){message("Select a protected file");return;}
+        File destination=new File(rootPath+"/Download",new File(path).getName());
+        if(destination.exists()){message("Download already has a file with this name");return;}
+        runWork("Exporting from Android/data…",()->{
+            FileTasks.checked(destination);
+            try(OutputStream output=new BufferedOutputStream(new FileOutputStream(destination))){bridge.export(path,output);}
+            catch(Exception e){destination.delete();throw e;}
+        });
     }
     void install(String path){
         if(DataBridge.protectedPath(path)){message("Export this APK from Android/data first");return;}
