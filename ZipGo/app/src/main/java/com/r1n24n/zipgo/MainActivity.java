@@ -428,11 +428,11 @@ public final class MainActivity extends Activity {
         EditText e=new EditText(this);e.setSingleLine(true);e.setText("Archive.zip");
         new AlertDialog.Builder(this).setTitle("Create ZIP archive").setView(e)
             .setNegativeButton("Cancel",null).setPositiveButton("Compress",(d,w)->{
-                String name=e.getText().toString().trim();
+                String entered=e.getText().toString().trim();
+                final String zipName=entered.toLowerCase(Locale.ROOT).endsWith(".zip")?entered:entered+".zip";
                 runWork("Compressing…",()->{
-                    FileTasks.validateName(name);
-                    if(!name.toLowerCase(Locale.ROOT).endsWith(".zip"))name+=".zip";
-                    FileTasks.zip(files,new File(current,name),this::message);selected.clear();
+                    FileTasks.validateName(zipName);
+                    FileTasks.zip(files,new File(current,zipName),this::message);selected.clear();
                 });
             }).show();
     }
