@@ -130,7 +130,6 @@ final class ArchiveEngine {
                                 copy(zip,out,budget);
                             }catch(Exception e){dest.delete();throw e;}
                         }
-                        zip.closeEntry();
                     }
                 }break;
             case "7z":
