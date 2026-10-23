@@ -9,8 +9,8 @@ android {
         versionCode 20
         versionName '2.0-beta1'
     }
-    buildTypes {
-        release { minifyEnabled false }
+    signingConfigs {\n        stable {\n            def keyFile = System.getenv('ZIPGO_KEYSTORE_PATH')\n            def storeSecret = System.getenv('ZIPGO_KEYSTORE_PASSWORD')\n            def aliasName = System.getenv('ZIPGO_KEY_ALIAS')\n            def keySecret = System.getenv('ZIPGO_KEY_PASSWORD')\n            if (keyFile && storeSecret && aliasName && keySecret) {\n                storeFile file(keyFile)\n                storePassword storeSecret\n                keyAlias aliasName\n                keyPassword keySecret\n            }\n        }\n    }\n    buildTypes {
+        release {\n            minifyEnabled false\n            if (System.getenv('ZIPGO_KEYSTORE_PATH')) signingConfig signingConfigs.stable\n        }
         debug { minifyEnabled false }
     }
 }
