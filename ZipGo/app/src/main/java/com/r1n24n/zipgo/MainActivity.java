@@ -450,7 +450,7 @@ public final class MainActivity extends Activity {
                         final char[] password=encrypted?pass.getText().toString().toCharArray():null;
                         if(encrypted&&password.length<6){
                             message("Use at least 6 characters for encrypted archive");
-                            Arrays.fill(password,'\\u0000');return;
+                            Arrays.fill(password,(char)0);return;
                         }
                         final String directory=current;
                         runWork("Creating "+format+"…",()->{
@@ -458,7 +458,7 @@ public final class MainActivity extends Activity {
                                 FileTasks.validateName(outputName);
                                 FileTasks.createArchive(files,new File(directory,outputName),format,password,this::message);
                                 selected.clear();
-                            }finally{if(password!=null)Arrays.fill(password,'\\u0000');}
+                            }finally{if(password!=null)Arrays.fill(password,(char)0);}
                         });
                     }).show();
             }).show();
