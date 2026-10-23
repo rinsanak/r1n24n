@@ -27,11 +27,12 @@ final class DataBridge {
     private final Shizuku.UserServiceArgs args;
     private IBinder binder;
     private boolean binding;
+    private boolean wanted;
     private boolean closed;
     private final int PERMISSION_CODE = 7239;
 
     private final Shizuku.OnBinderReceivedListener received=()->{
-        if (!closed && binder==null) activity.runOnUiThread(this::connect);
+        if (!closed && wanted && binder==null) activity.runOnUiThread(this::connect);
     };
     private final Shizuku.OnBinderDeadListener dead=()->{
         binder=null;binding=false;
@@ -65,6 +66,7 @@ final class DataBridge {
     }
     boolean connected() {return binder!=null && binder.isBinderAlive();}
     void connect(){
+        wanted=true;
         if(closed||connected()||binding)return;
         try {
             if(!Shizuku.pingBinder()) {
